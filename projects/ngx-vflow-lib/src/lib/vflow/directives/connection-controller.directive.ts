@@ -92,6 +92,10 @@ export class ConnectionControllerDirective {
         target: target.rawNode.id,
         sourceHandle: sourceHandle.rawHandle.id,
         targetHandle: targetHandle.rawHandle.id,
+        sourceHandleData: sourceHandle.rawHandle,
+        targetHandleData: targetHandle.rawHandle,
+        sourceNodeData: source.rawNode,
+        targetNodeData: target.rawNode,
       });
 
       // TODO: check how react flow handles highlight of handle
@@ -195,5 +199,9 @@ function statusToConnection(
     target: targetId,
     sourceHandle: sourceHandleId,
     targetHandle: targetHandleId,
+    sourceHandleData: sourceHandle.rawHandle,
+    targetHandleData: targetHandle.rawHandle,
+    sourceNodeData: source.rawNode,
+    targetNodeData: target.rawNode,
   };
 }
