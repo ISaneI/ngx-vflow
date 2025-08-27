@@ -15,6 +15,11 @@ import { Connection, Edge, Node, Vflow } from 'ngx-vflow';
   `,
   styles: [
     `
+      :host {
+        width: 100%;
+        height: 100%;
+      }
+
       .demo-container {
         width: 100%;
         height: 100%;
