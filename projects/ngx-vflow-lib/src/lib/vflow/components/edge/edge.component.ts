@@ -6,11 +6,14 @@ import { EdgeContext } from '../../interfaces/template-context.interface';
 import { SelectionService } from '../../services/selection.service';
 import { FlowSettingsService } from '../../services/flow-settings.service';
 import { EdgeLabelComponent } from '../edge-label/edge-label.component';
+import { WaypointComponent } from '../waypoint/waypoint.component';
 import { ConnectionControllerDirective } from '../../directives/connection-controller.directive';
 import { HandleModel } from '../../models/handle.model';
+import { WaypointModel } from '../../models/waypoint.model';
 import { FlowStatusService } from '../../services/flow-status.service';
 import { EdgeRenderingService } from '../../services/edge-rendering.service';
 import { PointerDirective } from '../../directives/pointer.directive';
+import { Point } from '../../interfaces/point.interface';
 
 @Component({
   standalone: true,
@@ -22,7 +25,7 @@ import { PointerDirective } from '../../directives/pointer.directive';
     class: 'selectable',
     '[style.visibility]': 'isReconnecting() ? "hidden" : "visible"',
   },
-  imports: [NgTemplateOutlet, EdgeLabelComponent, PointerDirective],
+  imports: [NgTemplateOutlet, EdgeLabelComponent, WaypointComponent, PointerDirective],
 })
 export class EdgeComponent {
   protected injector = inject(Injector);
@@ -64,5 +67,30 @@ export class EdgeComponent {
     event.stopPropagation();
 
     this.connectionController?.startReconnection(handle, this.model());
+  }
+
+  public onWaypointMove(event: { waypoint: WaypointModel; position: Point }): void {
+    this.model().updateWaypointPosition(event.waypoint, event.position);
+  }
+
+  public onWaypointRemove(waypoint: WaypointModel): void {
+    this.model().removeWaypoint(waypoint);
+  }
+
+  public onWaypointSelect(waypoint: WaypointModel): void {
+    // Clear selection from other waypoints
+    this.model()
+      .waypoints()
+      .forEach((wp) => {
+        if (wp.id !== waypoint.id) {
+          wp.deselect();
+        }
+      });
+
+    waypoint.select();
+
+    if (this.flowSettingsService.entitiesSelectable()) {
+      this.selectionService.select(this.model());
+    }
   }
 }

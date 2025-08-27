@@ -1,6 +1,7 @@
 import { CurveFactoryParams, CurveLayout } from '../../interfaces/curve-factory.interface';
 import { Point } from '../../interfaces/point.interface';
 import { Position } from '../../types/position.type';
+import { combinePointsWithWaypoints, createWaypointPath, calculateWaypointLabelPoints } from './waypoint-path-utils';
 
 const handleDirections = {
   left: { x: -1, y: 0 },
@@ -182,9 +183,22 @@ function getBend(a: Point, b: Point, c: Point, size: number): string {
 }
 
 export function smoothStepPath(
-  { sourcePoint, targetPoint, sourcePosition, targetPosition }: CurveFactoryParams,
+  { sourcePoint, targetPoint, sourcePosition, targetPosition, waypoints }: CurveFactoryParams,
   borderRadius: number = 5,
 ): CurveLayout {
+  // If waypoints are provided, use them to create a simple path through all points
+  if (waypoints && waypoints.length > 0) {
+    const allPoints = combinePointsWithWaypoints(sourcePoint, targetPoint, waypoints);
+    const path = createWaypointPath(allPoints);
+    const labelPoints = calculateWaypointLabelPoints(allPoints);
+
+    return {
+      path,
+      labelPoints,
+    };
+  }
+
+  // Original smooth step logic for edges without waypoints
   const [points, labelX, labelY] = getPoints({
     source: sourcePoint,
     sourcePosition,

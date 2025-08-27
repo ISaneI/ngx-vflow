@@ -1,0 +1,12 @@
+.waypoint-handle {
+  fill: #3b82f6;
+  stroke: #ffffff;
+  stroke-width: 2;
+  cursor: grab;
+  transition: all 0.2s ease;
+
+  &:hover {
+    fill: #2563eb;
+    r: 7;
+  }
+}

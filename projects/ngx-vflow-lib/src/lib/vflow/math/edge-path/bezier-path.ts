@@ -2,13 +2,28 @@ import { CurveFactoryParams, CurveLayout } from '../../interfaces/curve-factory.
 import { Point } from '../../interfaces/point.interface';
 import { Position } from '../../types/position.type';
 import { getPointOnLineByRatio } from '../point-on-line-by-ratio';
+import { combinePointsWithWaypoints, createWaypointPath, calculateWaypointLabelPoints } from './waypoint-path-utils';
 
 export function bezierPath({
   sourcePoint,
   targetPoint,
   sourcePosition,
   targetPosition,
+  waypoints,
 }: CurveFactoryParams): CurveLayout {
+  // If waypoints are provided, use them to create a simple path through all points
+  if (waypoints && waypoints.length > 0) {
+    const allPoints = combinePointsWithWaypoints(sourcePoint, targetPoint, waypoints);
+    const path = createWaypointPath(allPoints);
+    const labelPoints = calculateWaypointLabelPoints(allPoints);
+
+    return {
+      path,
+      labelPoints,
+    };
+  }
+
+  // Original bezier logic for edges without waypoints
   const distanceVector = { x: sourcePoint.x - targetPoint.x, y: sourcePoint.y - targetPoint.y };
 
   const sourceControl = calcControlPoint(sourcePoint, sourcePosition, distanceVector);

@@ -17,6 +17,8 @@ export interface CurveFactorySharedParams {
   allEdges: Edge[];
   /** Array of all nodes in the flow */
   allNodes: Node[] | DynamicNode[];
+  /** Optional waypoints that the curve should pass through */
+  waypoints?: Point[];
 }
 
 export interface ConnectionCurveFactoryParams extends CurveFactorySharedParams {

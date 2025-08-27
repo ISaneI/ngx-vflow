@@ -1,4 +1,4 @@
-import { computed, inject, signal } from '@angular/core';
+import { computed, effect, inject, signal, untracked, WritableSignal } from '@angular/core';
 import { EdgeLabelPosition } from '../interfaces/edge-label.interface';
 import { Edge, Curve, EdgeType } from '../interfaces/edge.interface';
 import { EdgeLabelModel } from './edge-label.model';
@@ -15,6 +15,8 @@ import { HandleModel } from './handle.model';
 import { CurveFactoryParams } from '../interfaces/curve-factory.interface';
 import { FlowEntitiesService } from '../services/flow-entities.service';
 import { extendedComputed } from '../utils/signals/extended-computed';
+import { WaypointModel } from './waypoint.model';
+import { Point } from '../interfaces/point.interface';
 
 export class EdgeModel implements FlowEntity, Contextable<EdgeContext> {
   private readonly flowEntitiesService = inject(FlowEntitiesService);
@@ -233,6 +235,10 @@ export class EdgeModel implements FlowEntity, Contextable<EdgeContext> {
 
   public edgeLabels: { [position in EdgeLabelPosition]?: EdgeLabelModel } = {};
 
+  public waypoints: WritableSignal<WaypointModel[]> = signal([]);
+
+  private waypointIdCounter = 0;
+
   constructor(public edge: Edge) {
     this.type = edge.type ?? 'default';
     this.curve = edge.curve ?? 'bezier';
@@ -242,6 +248,82 @@ export class EdgeModel implements FlowEntity, Contextable<EdgeContext> {
     if (edge.edgeLabels?.start) this.edgeLabels.start = new EdgeLabelModel(edge.edgeLabels.start);
     if (edge.edgeLabels?.center) this.edgeLabels.center = new EdgeLabelModel(edge.edgeLabels.center);
     if (edge.edgeLabels?.end) this.edgeLabels.end = new EdgeLabelModel(edge.edgeLabels.end);
+
+    // Initialize waypoints from edge data
+    if (edge.waypoints) {
+      const waypointModels = edge.waypoints.map(
+        (point) => new WaypointModel(`${edge.id}-waypoint-${this.waypointIdCounter++}`, point),
+      );
+      this.waypoints.set(waypointModels);
+    }
+
+    // Sync waypoints signal with edge data
+    effect(() => {
+      const waypoints = this.waypoints();
+      untracked(() => {
+        if (waypoints.length > 0) {
+          this.edge.waypoints = waypoints.map((wp) => wp.position());
+        } else {
+          delete this.edge.waypoints;
+        }
+      });
+    });
+  }
+
+  /**
+   * Add a waypoint at the specified position
+   */
+  public addWaypoint(point: Point, index?: number): void {
+    const waypointId = `${this.edge.id}-waypoint-${this.waypointIdCounter++}`;
+    const newWaypoint = new WaypointModel(waypointId, point);
+
+    this.waypoints.update((waypoints) => {
+      const newWaypoints = [...waypoints];
+      if (index !== undefined && index >= 0 && index <= newWaypoints.length) {
+        newWaypoints.splice(index, 0, newWaypoint);
+      } else {
+        newWaypoints.push(newWaypoint);
+      }
+      return newWaypoints;
+    });
+  }
+
+  /**
+   * Remove a waypoint by its model
+   */
+  public removeWaypoint(waypoint: WaypointModel): void {
+    this.waypoints.update((waypoints) => waypoints.filter((wp) => wp.id !== waypoint.id));
+  }
+
+  /**
+   * Remove a waypoint by its index
+   */
+  public removeWaypointAt(index: number): void {
+    this.waypoints.update((waypoints) => {
+      if (index >= 0 && index < waypoints.length) {
+        const newWaypoints = [...waypoints];
+        newWaypoints.splice(index, 1);
+        return newWaypoints;
+      }
+      return waypoints;
+    });
+  }
+
+  /**
+   * Update a waypoint position
+   */
+  public updateWaypointPosition(waypoint: WaypointModel, newPosition: Point): void {
+    waypoint.updatePosition(newPosition);
+
+    // Trigger effect to update edge.waypoints
+    this.waypoints.update((waypoints) => [...waypoints]);
+  }
+
+  /**
+   * Clear all waypoints
+   */
+  public clearWaypoints(): void {
+    this.waypoints.set([]);
   }
 
   private getPathFactoryParams(source: HandleModel, target: HandleModel): CurveFactoryParams {
@@ -254,6 +336,7 @@ export class EdgeModel implements FlowEntity, Contextable<EdgeContext> {
       targetPosition: target.rawHandle.position,
       allEdges: this.flowEntitiesService.rawEdges(),
       allNodes: this.flowEntitiesService.rawNodes(),
+      waypoints: this.waypoints().map((wp) => wp.position()),
     };
   }
 }

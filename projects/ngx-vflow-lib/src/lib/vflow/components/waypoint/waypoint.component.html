@@ -1,0 +1,17 @@
+@if (edgeModel().selected()) {
+  <svg:circle
+    class="waypoint__handler"
+    r="8"
+    [attr.cx]="model().position().x"
+    [attr.cy]="model().position().y"
+    (pointerdown)="onPointerStart($event)"
+    (pointerup)="onPointerEnd($event)"
+    (dblclick)="onDoubleClick($event)" />
+
+  <!-- <svg:circle
+    class="waypoint-outline"
+    r="8"
+    [attr.cx]="model().position().x"
+    [attr.cy]="model().position().y"
+    [class.waypoint-outline--selected]="model().selected()" /> -->
+}

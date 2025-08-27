@@ -36,6 +36,17 @@
   }
 }
 
+<!-- Waypoints -->
+@for (waypoint of model().waypoints(); track waypoint.id) {
+  <svg:g
+    waypoint
+    [model]="waypoint"
+    [edgeModel]="model()"
+    (waypointMove)="onWaypointMove($event)"
+    (waypointRemove)="onWaypointRemove($event)"
+    (waypointSelect)="onWaypointSelect($event)" />
+}
+
 @if (model().sourceHandle() && model().targetHandle()) {
   @if (model().reconnectable === true || model().reconnectable === 'source') {
     <svg:circle
