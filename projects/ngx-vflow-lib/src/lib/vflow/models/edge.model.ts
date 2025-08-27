@@ -15,6 +15,7 @@ import { HandleModel } from './handle.model';
 import { CurveFactoryParams } from '../interfaces/curve-factory.interface';
 import { FlowEntitiesService } from '../services/flow-entities.service';
 import { extendedComputed } from '../utils/signals/extended-computed';
+import { Point } from '../interfaces/point.interface';
 
 export class EdgeModel implements FlowEntity, Contextable<EdgeContext> {
   private readonly flowEntitiesService = inject(FlowEntitiesService);
@@ -30,6 +31,9 @@ export class EdgeModel implements FlowEntity, Contextable<EdgeContext> {
   public selected$ = toObservable(this.selected);
 
   public renderOrder = signal(0);
+
+  /** Waypoints for the edge path */
+  public waypoints = signal<Point[]>([]);
 
   public detached = computed(() => {
     const source = this.source();
@@ -62,6 +66,7 @@ export class EdgeModel implements FlowEntity, Contextable<EdgeContext> {
   public path = computed(() => {
     const source = this.sourceHandle();
     const target = this.targetHandle();
+    const waypoints = this.waypoints();
 
     // TODO: don't like this
     if (!source || !target) {
@@ -75,7 +80,7 @@ export class EdgeModel implements FlowEntity, Contextable<EdgeContext> {
       };
     }
 
-    const params = this.getPathFactoryParams(source, target);
+    const params = this.getPathFactoryParams(source, target, waypoints);
 
     switch (this.curve) {
       case 'straight':
@@ -239,12 +244,17 @@ export class EdgeModel implements FlowEntity, Contextable<EdgeContext> {
     this.reconnectable = edge.reconnectable ?? false;
     this.floating = edge.floating ?? false;
 
+    // Initialize waypoints from edge data
+    if (edge.waypoints) {
+      this.waypoints.set(edge.waypoints);
+    }
+
     if (edge.edgeLabels?.start) this.edgeLabels.start = new EdgeLabelModel(edge.edgeLabels.start);
     if (edge.edgeLabels?.center) this.edgeLabels.center = new EdgeLabelModel(edge.edgeLabels.center);
     if (edge.edgeLabels?.end) this.edgeLabels.end = new EdgeLabelModel(edge.edgeLabels.end);
   }
 
-  private getPathFactoryParams(source: HandleModel, target: HandleModel): CurveFactoryParams {
+  private getPathFactoryParams(source: HandleModel, target: HandleModel, waypoints: Point[]): CurveFactoryParams {
     return {
       mode: 'edge',
       edge: this.edge,
@@ -254,6 +264,7 @@ export class EdgeModel implements FlowEntity, Contextable<EdgeContext> {
       targetPosition: target.rawHandle.position,
       allEdges: this.flowEntitiesService.rawEdges(),
       allNodes: this.flowEntitiesService.rawNodes(),
+      waypoints: waypoints,
     };
   }
 }

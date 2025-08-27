@@ -19,24 +19,9 @@ export function getEdgeCenter(source: Point, target: Point): [number, number, nu
   return [centerX, centerY, xOffset, yOffset];
 }
 
-const getDirection = ({
-  source,
-  sourcePosition = 'bottom',
-  target,
-}: {
-  source: Point;
-  sourcePosition: Position;
-  target: Point;
-}): Point => {
-  if (sourcePosition === 'left' || sourcePosition === 'right') {
-    return source.x < target.x ? { x: 1, y: 0 } : { x: -1, y: 0 };
-  }
-  return source.y < target.y ? { x: 0, y: 1 } : { x: 0, y: -1 };
-};
-
 const distance = (a: Point, b: Point) => Math.sqrt(Math.pow(b.x - a.x, 2) + Math.pow(b.y - a.y, 2));
 
-// ith this function we try to mimic a orthogonal edge routing behaviour
+// With this function we try to mimic a orthogonal edge routing behaviour
 // It's not as good as a real orthogonal edge routing but it's faster and good enough as a default for step and smooth step edges
 function getPoints({
   source,
@@ -55,84 +40,21 @@ function getPoints({
   const targetDir = handleDirections[targetPosition];
   const sourceGapped: Point = { x: source.x + sourceDir.x * offset, y: source.y + sourceDir.y * offset };
   const targetGapped: Point = { x: target.x + targetDir.x * offset, y: target.y + targetDir.y * offset };
-  const dir = getDirection({
-    source: sourceGapped,
-    sourcePosition,
-    target: targetGapped,
-  });
-  const dirAccessor = dir.x !== 0 ? 'x' : 'y';
-  const currDir = dir[dirAccessor];
 
+  const [defaultCenterX, defaultCenterY] = getEdgeCenter(source, target);
   let points: Point[] = [];
-  let centerX, centerY;
+  let centerX = defaultCenterX;
+  let centerY = defaultCenterY;
   const sourceGapOffset = { x: 0, y: 0 };
   const targetGapOffset = { x: 0, y: 0 };
 
-  const [defaultCenterX, defaultCenterY] = getEdgeCenter(source, target);
-
   // opposite handle positions, default case
-  if (sourceDir[dirAccessor] * targetDir[dirAccessor] === -1) {
-    centerX = defaultCenterX;
-    centerY = defaultCenterY;
-    //    --->
-    //    |
-    // >---
-    const verticalSplit: Point[] = [
-      { x: centerX, y: sourceGapped.y },
-      { x: centerX, y: targetGapped.y },
+  if (sourcePosition !== targetPosition) {
+    points = [
+      { x: sourceGapped.x + sourceGapOffset.x, y: sourceGapped.y + sourceGapOffset.y },
+      { x: defaultCenterX, y: defaultCenterY },
+      { x: targetGapped.x + targetGapOffset.x, y: targetGapped.y + targetGapOffset.y },
     ];
-    //    |
-    //  ---
-    //  |
-    const horizontalSplit: Point[] = [
-      { x: sourceGapped.x, y: centerY },
-      { x: targetGapped.x, y: centerY },
-    ];
-
-    if (sourceDir[dirAccessor] === currDir) {
-      points = dirAccessor === 'x' ? verticalSplit : horizontalSplit;
-    } else {
-      points = dirAccessor === 'x' ? horizontalSplit : verticalSplit;
-    }
-  } else {
-    // sourceTarget means we take x from source and y from target, targetSource is the opposite
-    const sourceTarget: Point[] = [{ x: sourceGapped.x, y: targetGapped.y }];
-    const targetSource: Point[] = [{ x: targetGapped.x, y: sourceGapped.y }];
-    // this handles edges with same handle positions
-    if (dirAccessor === 'x') {
-      points = sourceDir.x === currDir ? targetSource : sourceTarget;
-    } else {
-      points = sourceDir.y === currDir ? sourceTarget : targetSource;
-    }
-
-    if (sourcePosition === targetPosition) {
-      const diff = Math.abs(source[dirAccessor] - target[dirAccessor]);
-
-      // if an edge goes from right to right for example (sourcePosition === targetPosition) and the distance between source.x and target.x is less than the offset, the added point and the gapped source/target will overlap. This leads to a weird edge path. To avoid this we add a gapOffset to the source/target
-      if (diff <= offset) {
-        const gapOffset = Math.min(offset - 1, offset - diff);
-        if (sourceDir[dirAccessor] === currDir) {
-          sourceGapOffset[dirAccessor] = (sourceGapped[dirAccessor] > source[dirAccessor] ? -1 : 1) * gapOffset;
-        } else {
-          targetGapOffset[dirAccessor] = (targetGapped[dirAccessor] > target[dirAccessor] ? -1 : 1) * gapOffset;
-        }
-      }
-    }
-
-    // these are conditions for handling mixed handle positions like Right -> Bottom for example
-    if (sourcePosition !== targetPosition) {
-      const dirAccessorOpposite = dirAccessor === 'x' ? 'y' : 'x';
-      const isSameDir = sourceDir[dirAccessor] === targetDir[dirAccessorOpposite];
-      const sourceGtTargetOppo = sourceGapped[dirAccessorOpposite] > targetGapped[dirAccessorOpposite];
-      const sourceLtTargetOppo = sourceGapped[dirAccessorOpposite] < targetGapped[dirAccessorOpposite];
-      const flipSourceTarget =
-        (sourceDir[dirAccessor] === 1 && ((!isSameDir && sourceGtTargetOppo) || (isSameDir && sourceLtTargetOppo))) ||
-        (sourceDir[dirAccessor] !== 1 && ((!isSameDir && sourceLtTargetOppo) || (isSameDir && sourceGtTargetOppo)));
-
-      if (flipSourceTarget) {
-        points = dirAccessor === 'x' ? sourceTarget : targetSource;
-      }
-    }
 
     const sourceGapPoint = { x: sourceGapped.x + sourceGapOffset.x, y: sourceGapped.y + sourceGapOffset.y };
     const targetGapPoint = { x: targetGapped.x + targetGapOffset.x, y: targetGapped.y + targetGapOffset.y };
@@ -182,102 +104,179 @@ function getBend(a: Point, b: Point, c: Point, size: number): string {
 }
 
 export function smoothStepPath(
-  { sourcePoint, targetPoint, sourcePosition, targetPosition }: CurveFactoryParams,
+  { sourcePoint, targetPoint, sourcePosition, targetPosition, waypoints = [] }: CurveFactoryParams,
   borderRadius: number = 5,
 ): CurveLayout {
-  const [points, labelX, labelY] = getPoints({
-    source: sourcePoint,
-    sourcePosition,
-    target: targetPoint,
-    targetPosition,
-    offset: 20,
-  });
+  // If no waypoints, use original smooth step logic
+  if (waypoints.length === 0) {
+    const [points, labelX, labelY] = getPoints({
+      source: sourcePoint,
+      sourcePosition,
+      target: targetPoint,
+      targetPosition,
+      offset: 20,
+    });
 
-  const path = points.reduce<string>((res, p, i) => {
-    let segment = '';
+    const path = points.reduce<string>((res, p, i) => {
+      let segment = '';
 
-    if (i > 0 && i < points.length - 1) {
-      segment = getBend(points[i - 1], p, points[i + 1], borderRadius);
-    } else {
-      segment = `${i === 0 ? 'M' : 'L'}${p.x} ${p.y}`;
+      if (i > 0 && i < points.length - 1) {
+        segment = getBend(points[i - 1], p, points[i + 1], borderRadius);
+      } else {
+        segment = `${i === 0 ? 'M' : 'L'}${p.x} ${p.y}`;
+      }
+
+      res += segment;
+
+      return res;
+    }, '');
+
+    // Performance optimization: Pre-calculate cumulative distances and use binary search
+    const n = points.length;
+    if (n < 2) {
+      return {
+        path,
+        labelPoints: {
+          start: { x: labelX, y: labelY },
+          center: { x: labelX, y: labelY },
+          end: { x: labelX, y: labelY },
+        },
+      };
     }
 
-    res += segment;
+    // Pre-calculate segment lengths and cumulative distances in a single loop
+    const segmentLengths: number[] = new Array(n - 1);
+    const cumulativeDistances: number[] = new Array(n);
+    cumulativeDistances[0] = 0;
 
-    return res;
-  }, '');
+    let totalLength = 0;
 
-  // Performance optimization: Pre-calculate cumulative distances and use binary search
-  const n = points.length;
-  if (n < 2) {
+    for (let i = 0; i < n - 1; i++) {
+      const dx = points[i + 1].x - points[i].x;
+      const dy = points[i + 1].y - points[i].y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      segmentLengths[i] = len;
+      totalLength += len;
+      cumulativeDistances[i + 1] = totalLength;
+    }
+
+    // Optimized helper function using binary search
+    const findPointAtDistance = (targetDistance: number): Point => {
+      if (targetDistance <= 0) return points[0];
+      if (targetDistance >= totalLength) return points[n - 1];
+
+      let left = 0;
+      let right = n - 1;
+
+      while (left < right) {
+        const mid = Math.floor((left + right) / 2);
+        if (cumulativeDistances[mid] < targetDistance) {
+          left = mid + 1;
+        } else {
+          right = mid;
+        }
+      }
+
+      const segmentIndex = left - 1;
+      const segmentStart = points[segmentIndex];
+      const segmentEnd = points[segmentIndex + 1];
+      const segmentDistance = targetDistance - cumulativeDistances[segmentIndex];
+      const segmentRatio = segmentDistance / segmentLengths[segmentIndex];
+
+      return {
+        x: segmentStart.x + (segmentEnd.x - segmentStart.x) * segmentRatio,
+        y: segmentStart.y + (segmentEnd.y - segmentStart.y) * segmentRatio,
+      };
+    };
+
     return {
       path,
       labelPoints: {
-        start: { x: labelX, y: labelY },
-        center: { x: labelX, y: labelY },
-        end: { x: labelX, y: labelY },
+        start: findPointAtDistance(totalLength * 0.15),
+        center: findPointAtDistance(totalLength * 0.5),
+        end: findPointAtDistance(totalLength * 0.85),
       },
     };
   }
 
-  // Pre-calculate segment lengths and cumulative distances in a single loop
-  const segmentLengths: number[] = new Array(n - 1);
-  const cumulativeDistances: number[] = new Array(n);
-  cumulativeDistances[0] = 0;
+  // Build step path through waypoints
+  const allPoints = [sourcePoint, ...waypoints, targetPoint];
+  let path = `M${sourcePoint.x},${sourcePoint.y}`;
 
-  let totalLength = 0;
+  for (let i = 1; i < allPoints.length; i++) {
+    const prev = allPoints[i - 1];
+    const curr = allPoints[i];
 
-  for (let i = 0; i < n - 1; i++) {
-    const dx = points[i + 1].x - points[i].x;
-    const dy = points[i + 1].y - points[i].y;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    segmentLengths[i] = len;
-    totalLength += len;
-    cumulativeDistances[i + 1] = totalLength;
+    // Create step path between points
+    const dx = curr.x - prev.x;
+    const dy = curr.y - prev.y;
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+      // Horizontal step first
+      path += ` L${curr.x},${prev.y}`;
+      path += ` L${curr.x},${curr.y}`;
+    } else {
+      // Vertical step first
+      path += ` L${prev.x},${curr.y}`;
+      path += ` L${curr.x},${curr.y}`;
+    }
   }
 
-  // Optimized helper function using binary search
-  const getPointAtRatio = (ratio: number): Point => {
-    const targetDistance = totalLength * ratio;
-
-    // Edge cases
-    if (targetDistance <= 0) return points[0];
-    if (targetDistance >= totalLength) return points[n - 1];
-
-    // Binary search for the correct segment
-    let low = 0;
-    let high = n - 1;
-
-    while (low < high - 1) {
-      const mid = (low + high) >>> 1; // Bitwise right shift is faster than Math.floor
-      if (cumulativeDistances[mid] < targetDistance) {
-        low = mid;
-      } else {
-        high = mid;
-      }
-    }
-
-    // Calculate position within the segment
-    const segmentStartDistance = cumulativeDistances[low];
-    const localDistance = targetDistance - segmentStartDistance;
-    const t = localDistance / segmentLengths[low];
-
-    // Linear interpolation
-    const start = points[low];
-    const end = points[low + 1];
-
-    return {
-      x: start.x + (end.x - start.x) * t,
-      y: start.y + (end.y - start.y) * t,
-    };
-  };
+  // Calculate label points based on total path length
+  const totalLength = calculatePathLength(allPoints);
+  const startDistance = totalLength * 0.15;
+  const centerDistance = totalLength * 0.5;
+  const endDistance = totalLength * 0.85;
 
   return {
     path,
     labelPoints: {
-      start: getPointAtRatio(0.15),
-      center: { x: labelX, y: labelY },
-      end: getPointAtRatio(0.85),
+      start: getPointAtDistance(allPoints, startDistance),
+      center: getPointAtDistance(allPoints, centerDistance),
+      end: getPointAtDistance(allPoints, endDistance),
     },
   };
+}
+
+/**
+ * Calculate the total length of a path through multiple points
+ */
+function calculatePathLength(points: Point[]): number {
+  let totalLength = 0;
+  for (let i = 1; i < points.length; i++) {
+    const dx = points[i].x - points[i - 1].x;
+    const dy = points[i].y - points[i - 1].y;
+    totalLength += Math.sqrt(dx * dx + dy * dy);
+  }
+  return totalLength;
+}
+
+/**
+ * Get a point at a specific distance along a path through multiple points
+ */
+function getPointAtDistance(points: Point[], targetDistance: number): Point {
+  if (points.length < 2) {
+    return points[0] || { x: 0, y: 0 };
+  }
+
+  let currentDistance = 0;
+  for (let i = 1; i < points.length; i++) {
+    const dx = points[i].x - points[i - 1].x;
+    const dy = points[i].y - points[i - 1].y;
+    const segmentLength = Math.sqrt(dx * dx + dy * dy);
+
+    if (currentDistance + segmentLength >= targetDistance) {
+      // Target distance is within this segment
+      const ratio = (targetDistance - currentDistance) / segmentLength;
+      return {
+        x: points[i - 1].x + dx * ratio,
+        y: points[i - 1].y + dy * ratio,
+      };
+    }
+
+    currentDistance += segmentLength;
+  }
+
+  // If target distance exceeds path length, return the last point
+  return points[points.length - 1];
 }

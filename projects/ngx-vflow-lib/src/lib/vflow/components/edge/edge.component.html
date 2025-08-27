@@ -36,6 +36,20 @@
   }
 }
 
+<!-- Waypoints -->
+@if (model().selected() && model().waypoints().length > 0) {
+  @for (waypoint of model().waypoints(); track $index) {
+    <svg:g
+      waypoint
+      [point]="waypoint"
+      [index]="$index"
+      [selected]="selectedWaypointIndex() === $index"
+      (waypointMove)="onWaypointMove($event)"
+      (waypointClick)="onWaypointClick($event)"
+      (waypointRemove)="onWaypointRemove($event)" />
+  }
+}
+
 @if (model().sourceHandle() && model().targetHandle()) {
   @if (model().reconnectable === true || model().reconnectable === 'source') {
     <svg:circle
